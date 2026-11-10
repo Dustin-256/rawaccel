@@ -1,0 +1,67 @@
+name: Build and release
+
+# Every push to master builds the GUI and publishes a GitHub release with a
+# ready-to-install zip (GUI + signed driver + installer).
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore rawaccel.sln
+
+      - name: Build GUI and wrapper
+        run: msbuild rawaccel.sln /t:grapher /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $h = Get-Content common/rawaccel-version.h -Raw
+          $maj = [regex]::Match($h, 'RA_VER_MAJOR (\d+)').Groups[1].Value
+          $min = [regex]::Match($h, 'RA_VER_MINOR (\d+)').Groups[1].Value
+          $pat = [regex]::Match($h, 'RA_VER_PATCH (\d+)').Groups[1].Value
+          $tag = "v$maj.$min.$pat-build.$env:GITHUB_RUN_NUMBER"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "driver=$maj.$min.$pat" >> $env:GITHUB_OUTPUT
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $out = "RawAccel-${{ steps.ver.outputs.tag }}"
+          New-Item -ItemType Directory $out | Out-Null
+          Copy-Item x64/Release/rawaccel.exe, x64/Release/rawaccel.exe.config, x64/Release/wrapper.dll, x64/Release/Newtonsoft.Json.dll $out
+          Copy-Item signed/x64/installer.exe, signed/x64/uninstaller.exe $out
+          Copy-Item signed/x64/driver $out -Recurse
+          Compress-Archive -Path "$out/*" -DestinationPath "$out.zip"
+          "ZIP=$out.zip" >> $env:GITHUB_ENV
+
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.ver.outputs.tag }}"
+          $notes = @"
+          Automatic build of ``$env:GITHUB_SHA`` from master.
+
+          Needs RawAccel driver ${{ steps.ver.outputs.driver }}. To install or update the driver, run ``installer.exe`` as admin, then restart.
+          "@
+          gh release create $tag $env:ZIP --target $env:GITHUB_SHA --title "RawAccel $tag" --notes $notes --generate-notes
