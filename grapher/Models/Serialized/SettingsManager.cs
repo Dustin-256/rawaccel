@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Windows.Forms;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Text;
 using System.Drawing;
 using grapher.Models.Devices;
@@ -150,20 +151,50 @@ namespace grapher.Models.Serialized
 
         #region Methods
 
+        private readonly object DriverWriteLock = new object();
+        private Task DriverWriteChain = Task.CompletedTask;
+
+        /// <summary>
+        /// Runs driver writes one after another, in the order they were requested.
+        /// Each write takes about a second in the driver, so separate threads could
+        /// otherwise finish out of order (e.g. an OFF landing after a later ON).
+        /// </summary>
+        public Task QueueDriverWrite(Action write)
+        {
+            lock (DriverWriteLock)
+            {
+                DriverWriteChain = DriverWriteChain.ContinueWith(
+                    _ => write(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.None,
+                    TaskScheduler.Default);
+                return DriverWriteChain;
+            }
+        }
+
         public void ResetDriver()
         {
             ActiveConfig = DriverConfig.GetDefault();
-            new Thread(() => DriverConfig.Deactivate()).Start();
+            QueueDriverWrite(() => DriverConfig.Deactivate());
         }
 
         /// <summary>
-        /// Re-sends the saved user settings to the driver (used by the accel on/off toggle).
+        /// Accel toggle OFF: puts the driver in passthrough without touching the
+        /// GUI's settings, so turning it back ON restores exactly what was there.
         /// </summary>
-        public void ReapplyUserConfig()
+        public Task TurnAccelOff()
+        {
+            return QueueDriverWrite(() => DriverConfig.Deactivate());
+        }
+
+        /// <summary>
+        /// Accel toggle ON: re-sends the saved user settings to the driver.
+        /// </summary>
+        public Task TurnAccelOn()
         {
             var cfg = UserConfig;
             ActiveConfig = cfg;
-            new Thread(() => cfg.Activate()).Start();
+            return QueueDriverWrite(() => cfg.Activate());
         }
 
         public void UpdateFieldsFromGUISettings()
@@ -200,7 +231,8 @@ namespace grapher.Models.Serialized
                 ActiveConfig = settings;
                 File.WriteAllText(Constants.DefaultSettingsFileName, settings.ToJSON());
 
-                new Thread(() => ActiveConfig.Activate()).Start();
+                var toWrite = ActiveConfig;
+                QueueDriverWrite(() => toWrite.Activate());
             }
 
             return errors == null;

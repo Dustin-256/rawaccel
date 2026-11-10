@@ -217,21 +217,39 @@ namespace grapher
 
         public void SetAccelEnabled(bool enabled)
         {
-            if (enabled == AccelEnabled) return;
+            if (enabled == AccelEnabled || (AccelToggleItem != null && !AccelToggleItem.Enabled)) return;
+
+            var write = enabled ? Settings.TurnAccelOn() : Settings.TurnAccelOff();
+
+            AccelEnabled = enabled;
+            UpdateAccelToggleItem();
 
             if (enabled)
             {
-                Settings.ReapplyUserConfig();
                 Settings.SetActiveHandles();
-            }
-            else
-            {
-                Settings.ResetDriver();
+                UpdateGraph();
             }
 
-            AccelEnabled = enabled;
-            RefreshActive();
-            UpdateAccelToggleItem();
+            // The GUI fields are left alone either way, so your settings stay on screen.
+            // Block clicks until the driver has finished this write.
+            if (AccelToggleItem != null) AccelToggleItem.Enabled = false;
+
+            write.ContinueWith(t =>
+            {
+                AccelForm.BeginInvoke((MethodInvoker)(() =>
+                {
+                    if (AccelToggleItem != null) AccelToggleItem.Enabled = true;
+
+                    if (t.IsFaulted)
+                    {
+                        var msg = t.Exception?.GetBaseException().Message ?? "unknown error";
+                        using (var form = new MessageDialog(msg, "could not change acceleration"))
+                        {
+                            form.ShowDialog();
+                        }
+                    }
+                }));
+            });
         }
 
         private void UpdateAccelToggleItem()
