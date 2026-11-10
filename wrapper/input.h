@@ -4,6 +4,7 @@
 #pragma comment(lib, "hid.lib")
 #pragma comment(lib, "User32.lib")
 
+#include <string>
 #include <string_view>
 #include <vector>
 

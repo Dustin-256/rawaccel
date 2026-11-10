@@ -235,6 +235,7 @@ namespace grapher
                 LutApplyActiveXLabel,
                 LutApplyActiveYLabel);
 
+            AccelGUI.AttachAccelToggle(menuStrip1);
             ResizeAndCenter();
         }
 
