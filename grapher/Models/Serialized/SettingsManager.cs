@@ -156,6 +156,16 @@ namespace grapher.Models.Serialized
             new Thread(() => DriverConfig.Deactivate()).Start();
         }
 
+        /// <summary>
+        /// Re-sends the saved user settings to the driver (used by the accel on/off toggle).
+        /// </summary>
+        public void ReapplyUserConfig()
+        {
+            var cfg = UserConfig;
+            ActiveConfig = cfg;
+            new Thread(() => cfg.Activate()).Start();
+        }
+
         public void UpdateFieldsFromGUISettings()
         {
             DpiField.SetToEntered(GuiSettings.DPI);

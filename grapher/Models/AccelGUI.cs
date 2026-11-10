@@ -102,9 +102,57 @@ namespace grapher
 
         private int ButtonTimerInterval { get; }
 
+        private ToolStripMenuItem AccelToggleItem { get; set; }
+
+        public bool AccelEnabled { get; private set; } = true;
+
         #endregion Properties
 
         #region Methods
+
+        /// <summary>
+        /// Adds an "Accel: ON/OFF" switch to the menu bar. OFF resets the driver to
+        /// passthrough (no acceleration); ON reapplies the saved settings.
+        /// </summary>
+        public void AttachAccelToggle(MenuStrip menuStrip)
+        {
+            AccelToggleItem = new ToolStripMenuItem
+            {
+                Alignment = ToolStripItemAlignment.Right,
+                Font = new Font(menuStrip.Font, FontStyle.Bold),
+                ToolTipText = "Turn acceleration on or off without closing RawAccel",
+            };
+            AccelToggleItem.Click += (s, e) => SetAccelEnabled(!AccelEnabled);
+            menuStrip.Items.Add(AccelToggleItem);
+            UpdateAccelToggleItem();
+        }
+
+        public void SetAccelEnabled(bool enabled)
+        {
+            if (enabled == AccelEnabled) return;
+
+            if (enabled)
+            {
+                Settings.ReapplyUserConfig();
+                Settings.SetActiveHandles();
+            }
+            else
+            {
+                Settings.ResetDriver();
+            }
+
+            AccelEnabled = enabled;
+            RefreshActive();
+            UpdateAccelToggleItem();
+        }
+
+        private void UpdateAccelToggleItem()
+        {
+            if (AccelToggleItem is null) return;
+
+            AccelToggleItem.Text = AccelEnabled ? "Accel: ON" : "Accel: OFF";
+            AccelToggleItem.ForeColor = AccelEnabled ? Color.ForestGreen : Color.Firebrick;
+        }
 
         private void SaveGUISettingsOnClose(Object sender, FormClosingEventArgs e)
         {
@@ -151,6 +199,8 @@ namespace grapher
                 }
                 else
                 {
+                    AccelEnabled = true;
+                    UpdateAccelToggleItem();
                     RefreshActive();
                     Settings.SetActiveHandles();
                     return;
@@ -240,6 +290,8 @@ namespace grapher
         {
             ButtonDelay(ResetButton);
             Settings.ResetDriver();
+            AccelEnabled = false;
+            UpdateAccelToggleItem();
             RefreshActive();
         }
 
