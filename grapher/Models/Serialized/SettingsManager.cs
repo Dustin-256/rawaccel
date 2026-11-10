@@ -283,8 +283,86 @@ namespace grapher.Models.Serialized
             DeviceChangeField?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>
+        /// Path of the settings file to load and apply on startup, or null if none is set.
+        /// </summary>
+        public static string AutoLoadPath
+        {
+            get
+            {
+                try
+                {
+                    if (!File.Exists(Constants.AutoLoadPathFileName)) return null;
+                    var p = File.ReadAllText(Constants.AutoLoadPathFileName).Trim();
+                    return string.IsNullOrEmpty(p) ? null : p;
+                }
+                catch (IOException)
+                {
+                    return null;
+                }
+            }
+            set
+            {
+                if (string.IsNullOrEmpty(value))
+                {
+                    if (File.Exists(Constants.AutoLoadPathFileName))
+                    {
+                        File.Delete(Constants.AutoLoadPathFileName);
+                    }
+                }
+                else
+                {
+                    File.WriteAllText(Constants.AutoLoadPathFileName, value);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reads a settings file and applies it to the driver.
+        /// </summary>
+        public bool TryLoadFile(string path, out string errors)
+        {
+            DriverConfig cfg;
+
+            try
+            {
+                var (c, err) = DriverConfig.Convert(File.ReadAllText(path));
+                if (err != null)
+                {
+                    errors = err;
+                    return false;
+                }
+                cfg = c;
+            }
+            catch (Exception e) when (e is IOException || e is JsonException || e is UnauthorizedAccessException)
+            {
+                errors = e.Message;
+                return false;
+            }
+
+            return TryActivate(cfg, out errors);
+        }
+
         private DriverConfig InitActiveAndGetUserConfig()
         {
+            var autoLoad = AutoLoadPath;
+            if (autoLoad != null && File.Exists(autoLoad))
+            {
+                try
+                {
+                    var (cfg, err) = DriverConfig.Convert(File.ReadAllText(autoLoad));
+
+                    if (err == null && TryActivate(cfg, out string _))
+                    {
+                        return cfg;
+                    }
+                }
+                catch (Exception e) when (e is IOException || e is JsonException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"bad auto-load settings: {e}");
+                }
+            }
+
             var path = Constants.DefaultSettingsFileName;
             if (File.Exists(path))
             {

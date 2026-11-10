@@ -126,6 +126,94 @@ namespace grapher
             UpdateAccelToggleItem();
         }
 
+        /// <summary>
+        /// Adds a "Settings File" menu: load a settings file now, and pick a file to
+        /// auto-load (and apply) every time RawAccel starts.
+        /// </summary>
+        public void AttachSettingsFileMenu(MenuStrip menuStrip)
+        {
+            const string filter = "RawAccel settings (*.json)|*.json|All files (*.*)|*.*";
+
+            var menu = new ToolStripMenuItem("Settings &File");
+
+            var loadItem = new ToolStripMenuItem("&Load settings file...");
+            loadItem.Click += (s, e) =>
+            {
+                using (var dlg = new OpenFileDialog { Filter = filter, Title = "Load RawAccel settings" })
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK)
+                    {
+                        LoadSettingsFile(dlg.FileName);
+                    }
+                }
+            };
+
+            var autoLoadItem = new ToolStripMenuItem();
+            var chooseAutoItem = new ToolStripMenuItem("&Choose file to auto-load...");
+            var clearAutoItem = new ToolStripMenuItem("&Turn off auto-load");
+
+            void RefreshAutoLoadItems()
+            {
+                var path = SettingsManager.AutoLoadPath;
+                autoLoadItem.Checked = path != null;
+                autoLoadItem.Text = path is null
+                    ? "&Auto-load on startup: off"
+                    : $"&Auto-load on startup: {System.IO.Path.GetFileName(path)}";
+                autoLoadItem.ToolTipText = path ?? "No file is auto-loaded; settings.json is used as normal";
+                clearAutoItem.Enabled = path != null;
+            }
+
+            chooseAutoItem.Click += (s, e) =>
+            {
+                using (var dlg = new OpenFileDialog { Filter = filter, Title = "Choose settings file to auto-load on startup" })
+                {
+                    if (dlg.ShowDialog() == DialogResult.OK)
+                    {
+                        SettingsManager.AutoLoadPath = dlg.FileName;
+                        RefreshAutoLoadItems();
+                        LoadSettingsFile(dlg.FileName);
+                    }
+                }
+            };
+
+            clearAutoItem.Click += (s, e) =>
+            {
+                SettingsManager.AutoLoadPath = null;
+                RefreshAutoLoadItems();
+            };
+
+            autoLoadItem.DropDownItems.AddRange(new ToolStripItem[] { chooseAutoItem, clearAutoItem });
+            menu.DropDownItems.AddRange(new ToolStripItem[] { loadItem, autoLoadItem });
+            RefreshAutoLoadItems();
+
+            // Put it before Help so the layout stays tidy.
+            int helpIndex = menuStrip.Items.Count;
+            for (int i = 0; i < menuStrip.Items.Count; i++)
+            {
+                if (menuStrip.Items[i].Text == "&Help") { helpIndex = i; break; }
+            }
+            menuStrip.Items.Insert(helpIndex, menu);
+        }
+
+        public void LoadSettingsFile(string path)
+        {
+            if (Settings.TryLoadFile(path, out string errors))
+            {
+                AccelEnabled = true;
+                UpdateAccelToggleItem();
+                RefreshUser();
+                RefreshActive();
+                Settings.SetActiveHandles();
+            }
+            else
+            {
+                using (var form = new MessageDialog(errors, "could not load settings file"))
+                {
+                    form.ShowDialog();
+                }
+            }
+        }
+
         public void SetAccelEnabled(bool enabled)
         {
             if (enabled == AccelEnabled) return;
