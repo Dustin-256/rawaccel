@@ -258,6 +258,7 @@ namespace grapher
                 LutApplyActiveXLabel,
                 LutApplyActiveYLabel);
 
+            AccelGUI.AttachSettingsFileMenu(menuStrip1);
             AccelGUI.AttachAccelToggle(menuStrip1);
         }
 

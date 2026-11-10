@@ -128,6 +128,9 @@ namespace grapher.Common
 
         public const string GuiConfigFileName = ".config";
 
+        /// <summary> File holding the path of the settings file to auto-load on startup. </summary>
+        public const string AutoLoadPathFileName = @"autoload.txt";
+
         /// <summary> Text to directionality panel title when panel is closed. </summary>
         public const string DirectionalityTitleClosed = "Anisotropy \u25BC";
 
