@@ -102,7 +102,7 @@ namespace grapher
 
         private int ButtonTimerInterval { get; }
 
-        private ToolStripMenuItem AccelToggleItem { get; set; }
+        private AccelToggleButton AccelToggleItem { get; set; }
 
         public bool AccelEnabled { get; private set; } = true;
 
@@ -116,25 +116,107 @@ namespace grapher
         /// </summary>
         public void AttachAccelToggle(MenuStrip menuStrip)
         {
-            AccelToggleItem = new ToolStripMenuItem
-            {
-                Font = new Font(menuStrip.Font, FontStyle.Bold),
-                ToolTipText = "Turn acceleration on or off without closing RawAccel",
-                Overflow = ToolStripItemOverflow.Never,
-            };
-            AccelToggleItem.Click += (s, e) => SetAccelEnabled(!AccelEnabled);
-
-            // The menu bar is narrow, and items that don't fit are silently hidden.
-            // Put the toggle first so it is always visible, and let the other menus
-            // spill into an overflow (>>) button instead of disappearing.
-            menuStrip.Items.Insert(0, AccelToggleItem);
+            // Let menus that don't fit spill into an overflow button instead of vanishing.
             menuStrip.CanOverflow = true;
             foreach (ToolStripItem item in menuStrip.Items)
             {
-                if (item != AccelToggleItem) item.Overflow = ToolStripItemOverflow.AsNeeded;
+                item.Overflow = ToolStripItemOverflow.AsNeeded;
             }
 
+            AccelToggleItem = new AccelToggleButton
+            {
+                Size = WriteButton.Size,
+                Font = new Font(WriteButton.Font.FontFamily, 10f, FontStyle.Bold),
+                TabIndex = WriteButton.TabIndex + 1,
+            };
+            AccelToggleItem.Click += (s, e) => SetAccelEnabled(!AccelEnabled);
+            WriteButton.Parent.Controls.Add(AccelToggleItem);
+            AccelToggleItem.BringToFront();
+
+            ButtonRowRight = ResetButton.Right + 13;
+            LastWriteButtonLeft = WriteButton.Left;
+            WriteButton.LocationChanged += (s, e) => LayoutButtonRow();
+            LayoutButtonRow(force: true);
+
             UpdateAccelToggleItem();
+        }
+
+        private int ButtonRowRight { get; set; }
+
+        private int LastWriteButtonLeft { get; set; }
+
+        private bool LayingOutButtons { get; set; }
+
+        /// <summary>
+        /// Puts Apply, Reset and the accel toggle side by side in one row.
+        /// If something else moves the Apply button (chart layout changes),
+        /// the whole row shifts by the same amount.
+        /// </summary>
+        private void LayoutButtonRow(bool force = false)
+        {
+            if (LayingOutButtons || AccelToggleItem is null) return;
+
+            LayingOutButtons = true;
+            try
+            {
+                if (!force)
+                {
+                    ButtonRowRight += WriteButton.Left - LastWriteButtonLeft;
+                }
+
+                const int gap = 6;
+                const int width = 88;
+                int total = 3 * width + 2 * gap;
+                int left = Math.Max(4, ButtonRowRight - total);
+                int top = WriteButton.Top;
+
+                WriteButton.SetBounds(left, top, width, WriteButton.Height);
+                ResetButton.SetBounds(left + width + gap, top, width, WriteButton.Height);
+                AccelToggleItem.SetBounds(left + 2 * (width + gap), top, width, WriteButton.Height);
+
+                LastWriteButtonLeft = WriteButton.Left;
+            }
+            finally
+            {
+                LayingOutButtons = false;
+            }
+        }
+
+        /// <summary>
+        /// Green/red on-off button. It draws itself so theme changes don't restyle it.
+        /// </summary>
+        private class AccelToggleButton : Control
+        {
+            public bool On { get; set; } = true;
+
+            public AccelToggleButton()
+            {
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                Cursor = Cursors.Hand;
+            }
+
+            protected override void OnEnabledChanged(EventArgs e)
+            {
+                base.OnEnabledChanged(e);
+                Invalidate();
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var fill = !Enabled ? Color.DimGray
+                    : On ? Color.FromArgb(46, 139, 87) : Color.FromArgb(178, 34, 34);
+
+                using (var brush = new SolidBrush(fill))
+                using (var pen = new Pen(ControlPaint.Dark(fill)))
+                {
+                    e.Graphics.FillRectangle(brush, ClientRectangle);
+                    e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+                }
+
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Color.White,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            }
         }
 
         /// <summary>
@@ -266,8 +348,9 @@ namespace grapher
         {
             if (AccelToggleItem is null) return;
 
+            AccelToggleItem.On = AccelEnabled;
             AccelToggleItem.Text = AccelEnabled ? "Accel ON" : "Accel OFF";
-            AccelToggleItem.ForeColor = AccelEnabled ? Color.ForestGreen : Color.Firebrick;
+            AccelToggleItem.Invalidate();
         }
 
         private void SaveGUISettingsOnClose(Object sender, FormClosingEventArgs e)
