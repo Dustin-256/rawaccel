@@ -118,12 +118,22 @@ namespace grapher
         {
             AccelToggleItem = new ToolStripMenuItem
             {
-                Alignment = ToolStripItemAlignment.Right,
                 Font = new Font(menuStrip.Font, FontStyle.Bold),
                 ToolTipText = "Turn acceleration on or off without closing RawAccel",
+                Overflow = ToolStripItemOverflow.Never,
             };
             AccelToggleItem.Click += (s, e) => SetAccelEnabled(!AccelEnabled);
-            menuStrip.Items.Add(AccelToggleItem);
+
+            // The menu bar is narrow, and items that don't fit are silently hidden.
+            // Put the toggle first so it is always visible, and let the other menus
+            // spill into an overflow (>>) button instead of disappearing.
+            menuStrip.Items.Insert(0, AccelToggleItem);
+            menuStrip.CanOverflow = true;
+            foreach (ToolStripItem item in menuStrip.Items)
+            {
+                if (item != AccelToggleItem) item.Overflow = ToolStripItemOverflow.AsNeeded;
+            }
+
             UpdateAccelToggleItem();
         }
 
@@ -135,7 +145,7 @@ namespace grapher
         {
             const string filter = "RawAccel settings (*.json)|*.json|All files (*.*)|*.*";
 
-            var menu = new ToolStripMenuItem("Settings &File");
+            var menu = new ToolStripMenuItem("&File");
 
             var loadItem = new ToolStripMenuItem("&Load settings file...");
             loadItem.Click += (s, e) =>
@@ -256,7 +266,7 @@ namespace grapher
         {
             if (AccelToggleItem is null) return;
 
-            AccelToggleItem.Text = AccelEnabled ? "Accel: ON" : "Accel: OFF";
+            AccelToggleItem.Text = AccelEnabled ? "Accel ON" : "Accel OFF";
             AccelToggleItem.ForeColor = AccelEnabled ? Color.ForestGreen : Color.Firebrick;
         }
 
